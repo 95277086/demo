@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:context="http://www.springframework.org/schema/context" 
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans-4.3.xsd
+                           http://www.springframework.org/schema/tx
+                           http://www.springframework.org/schema/tx/spring-tx-4.3.xsd
+                           http://www.springframework.org/schema/aop
+                           http://www.springframework.org/schema/aop/spring-aop-4.3.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context-4.3.xsd">
+
+	
+	 <!-- 自动扫描 必须要有这句，启动的时候才会去扫描注册bean dao-->  
+    <context:component-scan base-package="com" />  
+    <!-- 告诉spring 使用cglib 来生产代理 -->
+    <aop:aspectj-autoproxy></aop:aspectj-autoproxy>
+    <!-- 数据链接池 -->
+    <import resource="datasource.xml"/>
+    <!-- 多数据源配置 其实就是根据key 来选择数据源-->
+    <bean id="dataSource" class="com.datasource.DynamicDataSource">  
+        <property name="targetDataSources">
+            
+              <map key-type="java.lang.String">    
+                 <entry key="test1" value-ref="test1"/>    
+                 <entry key="test2" value-ref="test2"/>    
+              </map>    
+        </property>    
+        <property name="defaultTargetDataSource" ref="test1"/>    
+    </bean> 
+    
+    <!-- 加入注解datasource 选择数据源, aop调用之前通过注解选择数据源-->
+    
+    <bean id="manyDataSourceAspect" class="com.datasource.DataSourceAspect" />  
+    <aop:config>  
+        <aop:aspect id="c" ref="manyDataSourceAspect">  
+            <aop:pointcut id="tx" expression="execution(* com.service.*.*(..))"/>  
+            <aop:before pointcut-ref="tx" method="before"/>  
+        </aop:aspect>  
+    </aop:config> 
+    
+    
+    <!-- spring和MyBatis完美整合，不需要mybatis的配置映射文件 -->
+    <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+        <property name="dataSource" ref="dataSource" />
+        <!-- 自动扫描mapping.xml文件，**表示迭代查找 就不用在mybatis-config中加mapper-->
+        <property name="mapperLocations" value="classpath:com/mapper/*.xml" />
+    </bean>
+
+    <!-- DAO接口所在包名，Spring会自动查找其下的类  跟mapper.xml对应-->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.dao" />
+        <property name="sqlSessionFactoryBeanName" value="sqlSessionFactory" />
+    </bean>
+    
+    <!-- (事务管理)transaction manager, use JtaTransactionManager for global tx -->
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource" />
+    </bean>
+    <tx:annotation-driven transaction-manager="transactionManager" />
+
+</beans>
